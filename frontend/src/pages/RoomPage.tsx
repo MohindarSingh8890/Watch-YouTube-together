@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
 import VideoPlayer from '../components/room/VideoPlayer';
@@ -22,11 +21,10 @@ import { Users, MessageCircle, ChevronLeft, ChevronRight, Lock } from 'lucide-re
 
 type MobileTab = 'participants' | 'chat';
 
-// chhota red dot with count, chat tab ke upar chipka rehta hai
 function ChatBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -top-1.5 -right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-accent-red text-white text-[11px] font-bold flex items-center justify-center shadow-md">
+    <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-accent-red text-white text-[11px] font-bold leading-none flex items-center justify-center shadow-md">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -76,9 +74,9 @@ export default function RoomPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<MobileTab>('participants');
 
-  // unread badge for chat, keeps climbing till the tab is actually opened
   const [unseenChat, setUnseenChat] = useState(0);
   const seenLenRef = useRef(chat.length);
+  const chatReadyRef = useRef(false);
   const [createdModalOpen, setCreatedModalOpen] = useState(
     () => (location.state as { justCreated?: boolean } | null)?.justCreated === true
   );
@@ -87,8 +85,16 @@ export default function RoomPage() {
   const [removeModalTarget, setRemoveModalTarget] = useState<Participant | null>(null);
   const [transferModalTarget, setTransferModalTarget] = useState<Participant | null>(null);
 
-  // jab chat tab band ho aur messages girein to counter badhao, tab kholte hi zero
   useEffect(() => {
+    if (!ready) return;
+
+    // Existing history is not unread; only messages received after joining count.
+    if (!chatReadyRef.current) {
+      chatReadyRef.current = true;
+      seenLenRef.current = chat.length;
+      return;
+    }
+
     if (mobileTab === 'chat') {
       seenLenRef.current = chat.length;
       setUnseenChat(0);
@@ -166,18 +172,6 @@ export default function RoomPage() {
                   onTimeChange={onPlayerTime}
                 />
 
-                {/* remote reactions float over the video */}
-                {floating.map((f) => (
-                  <motion.div
-                    key={f.id}
-                    className="absolute bottom-8 left-1/2 pointer-events-none text-2xl"
-                    initial={{ opacity: 1, y: 0, x: -12 }}
-                    animate={{ opacity: 0, y: -80 }}
-                    transition={{ duration: 1.3, ease: 'easeOut' }}
-                  >
-                    {f.emoji}
-                  </motion.div>
-                ))}
               </div>
 
               {/* controls row */}
@@ -190,7 +184,7 @@ export default function RoomPage() {
 
               {/* reactions */}
               <div className="flex items-center justify-between">
-                <ReactionsBar onReact={react} />
+                <ReactionsBar onReact={react} reactions={floating} />
                 {!canControl && (
                   <Button
                     variant="secondary"

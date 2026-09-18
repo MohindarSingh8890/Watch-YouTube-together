@@ -144,9 +144,31 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
   }, []);
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const resizePlayer = () => {
+      const player = playerRef.current;
+      const playerBox = playerBoxRef.current;
+      if (!player?.setSize || !playerBox) return;
+
+      if (document.fullscreenElement === playerBox) {
+        player.setSize(window.innerWidth, window.innerHeight);
+      } else {
+        const width = playerBox.clientWidth;
+        if (width) player.setSize(width, Math.round(width * 9 / 16));
+      }
+    };
+
+    const onChange = () => {
+      const fullscreen = document.fullscreenElement === playerBoxRef.current;
+      setIsFullscreen(fullscreen);
+      requestAnimationFrame(resizePlayer);
+    };
+
     document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    window.addEventListener('resize', resizePlayer);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      window.removeEventListener('resize', resizePlayer);
+    };
   }, []);
 
   const toggleFullscreen = () => {
@@ -207,7 +229,7 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
   }
 
   return (
-    <div ref={playerBoxRef} className="relative w-full bg-black rounded-2xl overflow-hidden group">
+    <div ref={playerBoxRef} className="watch-player relative w-full bg-black rounded-2xl overflow-hidden group">
       {/* the yt api swaps this div for the iframe */}
       <div ref={containerRef} className="relative aspect-video w-full" />
 
