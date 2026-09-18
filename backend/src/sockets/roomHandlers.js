@@ -36,17 +36,29 @@ function registerRoomHandlers(socket, io) {
     }
 
     const room = roomService.getRoom(roomCode);
-    const participant = new Participant(username, socket.id);
-    room.addParticipant(participant);
+    const returning =
+      takeReturningParticipant(room, payload?.participantId, username, socket.id) ||
+      reclaimIdleParticipant(room, username, io, socket.id);
+
+    if (!returning && payload?.participantId) {
+      return ack?.({ ok: false, message: "Session expired or no longer valid" });
+    }
+
+    const participant = returning || new Participant(username, socket.id);
+    if (!returning) room.addParticipant(participant);
+    dropStaleSockets(io, socket.id, participant.id);
+
     socketRoomMap.set(socket.id, { roomCode: room.code, participantId: participant.id });
     socket.join(room.code);
 
-    socket.to(room.code).emit(EVENTS.USER_JOINED, {
-      username,
-      userId: participant.id,
-      role: participant.role,
-      participants: room.participantsList(),
-    });
+    if (!returning) {
+      socket.to(room.code).emit(EVENTS.USER_JOINED, {
+        username,
+        userId: participant.id,
+        role: participant.role,
+        participants: room.participantsList(),
+      });
+    }
 
     ack?.({
       ok: true,
@@ -283,6 +295,35 @@ function leaveRoom(socket, io) {
     userId: participant.id,
     participants: room.participantsList(),
   });
+}
+
+function takeReturningParticipant(room, participantId, username, socketId) {
+  if (typeof participantId !== "string" || !participantId) return null;
+  const p = room.participants.get(participantId);
+  if (!p || p.username !== username) return null;
+  p.socketId = socketId;
+  return p;
+}
+
+function reclaimIdleParticipant(room, username, io, socketId) {
+  for (const p of room.participants.values()) {
+    if (p.username !== username) continue;
+    const live = getSocketIdsByParticipant(room.code, p.id).some((id) =>
+      io.sockets.sockets.has(id)
+    );
+    if (live) continue;
+    p.socketId = socketId;
+    return p;
+  }
+  return null;
+}
+
+function dropStaleSockets(io, newSocketId, participantId) {
+  for (const [socketId, entry] of socketRoomMap) {
+    if (entry.participantId !== participantId || socketId === newSocketId) continue;
+    if (io.sockets.sockets.has(socketId)) continue;
+    socketRoomMap.delete(socketId);
+  }
 }
 
 function kickParticipant(room, userId, io) {

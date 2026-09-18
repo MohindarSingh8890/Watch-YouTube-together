@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, User } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
@@ -13,21 +13,25 @@ import { RoomAck } from '../types';
 export default function JoinRoomPage() {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
+  const location = useLocation();
+  const [username, setUsername] = useState(
+    () => (location.state as { username?: string } | null)?.username ?? ''
+  );
   const [joining, setJoining] = useState(false);
   const code = roomCode || '';
+
 
   const handleJoin = () => {
     if (!username.trim() || joining) return;
     setJoining(true);
     socket.emit(EVENTS.JOIN_ROOM, { roomCode: code, username: username.trim() }, (res: RoomAck) => {
       setJoining(false);
-      if (!res?.ok || !res.room) {
+      if (!res?.ok || !res.room || !res.participant) {
         showToast(res?.message || 'Could not join the room', 'error');
         return;
       }
       beginRoomSession(res);
-      navigate(`/room/${code}`);
+      navigate(`/${code}/${res.participant.role}`);
     });
   };
 

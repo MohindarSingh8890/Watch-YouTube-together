@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
 import { VideoState } from '../../types';
 import { loadYouTubeApi } from '../../utils/youtube';
 
@@ -20,6 +20,7 @@ function formatTime(seconds: number) {
 
 export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek, onTimeChange }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const playerBoxRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const suppressUntilRef = useRef(0);
   const lastVideoIdRef = useRef('');
@@ -28,6 +29,7 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
   const [muted, setMuted] = useState(false);
   const [now, setNow] = useState(video.currentTime);
   const [duration, setDuration] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // keep latest props available to the yt event callbacks
   const cbRef = useRef({ video, canControl, onPlay, onPause, onSeek, onTimeChange });
@@ -78,8 +80,11 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
             const t = player.getCurrentTime() || 0;
             if (e.data === 1) {
               cbRef.current.onPlay(t);
-            } else if (e.data === 2 || e.data === 0) {
-              cbRef.current.onPause(e.data === 0 ? 0 : t);
+            } else if (e.data === 2) {
+              cbRef.current.onPause(t);
+            } else if (e.data === 0 && cbRef.current.canControl) {
+              // a video that ran to the end isn't someone hitting pause
+              cbRef.current.onPause(0);
             }
           },
         },
@@ -138,6 +143,20 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      playerBoxRef.current?.requestFullscreen().catch(() => {});
+    }
+  };
+
   const togglePlay = () => {
     if (!cbRef.current.canControl || !playerRef.current) return;
     const p = playerRef.current;
@@ -180,9 +199,12 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
   }
 
   return (
-    <div className="relative w-full bg-black rounded-2xl overflow-hidden group">
+    <div ref={playerBoxRef} className="relative w-full bg-black rounded-2xl overflow-hidden group">
       {/* the yt api swaps this div for the iframe */}
       <div ref={containerRef} className="relative aspect-video w-full" />
+
+      {/* swallows clicks so the yt iframe can't toggle playback on its own */}
+      {!canControl && <div className="absolute inset-0" />}
 
       {!canControl && (
         <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 text-xs text-zinc-300 flex items-center gap-1.5">
@@ -197,8 +219,9 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
       {/* big play button */}
       <button
         onClick={togglePlay}
-        className={`absolute z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center transition-all hover:bg-white/30 hover:scale-105 ${
-          !canControl ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+        disabled={!canControl}
+        className={`absolute z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center transition-all ${
+          canControl ? 'cursor-pointer hover:bg-white/30 hover:scale-105' : 'opacity-40 cursor-not-allowed'
         }`}
       >
         {playing ? (
@@ -211,8 +234,10 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
       {/* bottom overlay controls */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-8 pb-3 px-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
         <div
-          className={`w-full h-1.5 bg-zinc-700 rounded-full mb-3 ${canControl ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-          onClick={onSeekBarClick}
+          className={`w-full h-1.5 bg-zinc-700 rounded-full mb-3 ${
+            canControl ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none'
+          }`}
+          onClick={canControl ? onSeekBarClick : undefined}
         >
           <div className="h-full bg-accent-red rounded-full relative" style={{ width: `${progressPct}%` }}>
             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-accent-red rounded-full shadow-md" />
@@ -223,7 +248,10 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
           <div className="flex items-center gap-3">
             <button
               onClick={togglePlay}
-              className={`text-white hover:text-accent-red transition-colors ${!canControl ? 'opacity-40' : 'cursor-pointer'}`}
+              disabled={!canControl}
+              className={`transition-colors ${
+                canControl ? 'text-white hover:text-accent-red cursor-pointer' : 'text-white opacity-40 cursor-not-allowed'
+              }`}
             >
               {playing ? <Pause size={20} /> : <Play size={20} />}
             </button>
@@ -237,8 +265,12 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
               {formatTime(now)} / {formatTime(duration)}
             </span>
           </div>
-          <button className="text-white hover:text-zinc-300 transition-colors cursor-pointer">
-            <Maximize size={18} />
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            className="text-white hover:text-zinc-300 transition-colors cursor-pointer"
+          >
+            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
           </button>
         </div>
       </div>

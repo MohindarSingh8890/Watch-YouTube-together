@@ -1,8 +1,14 @@
 import { RoomSession, RoomAck } from '../types';
 import { mapChatMessage, mapParticipant } from './socket';
 
-// in-memory only on purpose: a page refresh drops you back to the home screen,
-// which is right because the backend has no way to recognise a reconnected socket
+const STORAGE_KEY = 'watch-party-session';
+
+export interface SavedSession {
+  username: string;
+  roomCode: string;
+  participantId: string;
+}
+
 let session: RoomSession | null = null;
 
 export function beginRoomSession(ack: RoomAck): RoomSession | null {
@@ -31,6 +37,7 @@ export function beginRoomSession(ack: RoomAck): RoomSession | null {
     },
     chatHistory: (ack.chatHistory ?? []).map((m) => mapChatMessage(m, participants)),
   };
+  save(session);
   return session;
 }
 
@@ -40,4 +47,37 @@ export function getRoomSession() {
 
 export function clearRoomSession() {
   session = null;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+}
+
+export function getSavedSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (
+      typeof saved?.username === 'string' &&
+      typeof saved?.roomCode === 'string' &&
+      typeof saved?.participantId === 'string' &&
+      saved.username &&
+      saved.roomCode &&
+      saved.participantId
+    ) {
+      return saved;
+    }
+  } catch {}
+  return null;
+}
+
+function save(next: RoomSession) {
+  const saved: SavedSession = {
+    username: next.username,
+    roomCode: next.roomCode,
+    participantId: next.participant.id,
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  } catch {}
 }

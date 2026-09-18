@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { EVENTS } from '../constants/socketEvents';
 import { socket, mapChatMessage, mapParticipant } from '../services/socket';
-import { clearRoomSession, getRoomSession } from '../services/roomSession';
+import { beginRoomSession, clearRoomSession, getRoomSession, getSavedSession } from '../services/roomSession';
 import { showToast } from '../components/common/Toast';
-import { ChatMessage, Participant, Role, VideoState } from '../types';
+import { ChatMessage, Participant, Role, RoomAck, VideoState } from '../types';
 
 interface FloatingReaction {
   id: number;
@@ -15,7 +15,10 @@ type Ack = { ok: boolean; message?: string } | undefined;
 
 export function useRoom() {
   const navigate = useNavigate();
+  const { roomCode, position } = useParams();
+  const code = roomCode || '';
   const session = getRoomSession();
+  const [connected, setConnected] = useState(!!session);
 
   const [currentUser, setCurrentUser] = useState<Participant | null>(session?.participant ?? null);
   const [participants, setParticipants] = useState<Participant[]>(session?.room.participants ?? []);
@@ -36,9 +39,50 @@ export function useRoom() {
   useEffect(() => { meRef.current = currentUser; }, [currentUser]);
   useEffect(() => { participantsRef.current = participants; }, [participants]);
 
+  const rejoin = useCallback(() => {
+    const current = getRoomSession();
+    const saved = current
+      ? { username: current.username, roomCode: current.roomCode, participantId: current.participant.id }
+      : getSavedSession();
+    if (!saved) return;
+
+    socket.emit(
+      EVENTS.JOIN_ROOM,
+      { roomCode: saved.roomCode, username: saved.username, participantId: saved.participantId },
+      (res: RoomAck) => {
+        if (!res?.ok || !res.room) {
+          clearRoomSession();
+          navigate('/');
+          return;
+        }
+        const restored = beginRoomSession(res);
+        if (!restored) return;
+        setCurrentUser(restored.participant);
+        setParticipants(restored.room.participants);
+        setVideo(restored.room.videoState ?? { videoId: '', isPlaying: false, currentTime: 0, duration: 0 });
+        setChat(restored.chatHistory);
+        setHostId(restored.room.hostId);
+        setConnected(true);
+      }
+    );
+  }, [navigate]);
+
   useEffect(() => {
-    if (!session) navigate('/');
-  }, [session, navigate]);
+    if (session) return;
+
+    const saved = getSavedSession();
+    if (!saved || saved.roomCode.toUpperCase() !== code.toUpperCase()) {
+      navigate(`/join/${code}`);
+      return;
+    }
+
+    rejoin();
+  }, [session, code, navigate, rejoin]);
+
+  useEffect(() => {
+    if (!currentUser || !roomCode || position === currentUser.role) return;
+    navigate(`/${roomCode}/${currentUser.role}`, { replace: true });
+  }, [currentUser?.role, position, roomCode, navigate]);
 
   const syncParticipants = useCallback((rawList: any[]) => {
     const list = rawList.map(mapParticipant);
@@ -54,7 +98,7 @@ export function useRoom() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
+    if (!connected) return;
 
     const onSync = (s: any) =>
       setVideo((prev) => ({
@@ -114,10 +158,10 @@ export function useRoom() {
 
     const onError = (d: any) => showToast(d.message, 'error');
 
+    const onConnect = () => rejoin();
+
     const onDisconnect = () => {
-      clearRoomSession();
       showToast('Connection lost', 'error');
-      navigate('/');
     };
 
     socket.on(EVENTS.SYNC_STATE, onSync);
@@ -130,6 +174,7 @@ export function useRoom() {
     socket.on(EVENTS.CHAT_MESSAGE, onChat);
     socket.on(EVENTS.REACTION, onReaction);
     socket.on(EVENTS.ERROR_EVENT, onError);
+    socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
 
     return () => {
@@ -143,9 +188,10 @@ export function useRoom() {
       socket.off(EVENTS.CHAT_MESSAGE, onChat);
       socket.off(EVENTS.REACTION, onReaction);
       socket.off(EVENTS.ERROR_EVENT, onError);
+      socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
     };
-  }, [session, navigate, syncParticipants, addFloating]);
+  }, [connected, navigate, syncParticipants, addFloating, rejoin]);
 
   // ---- actions ----
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/layout/Navbar';
 import Sidebar from '../components/layout/Sidebar';
@@ -12,6 +12,7 @@ import ReactionsBar from '../components/room/ReactionsBar';
 import RoleAssignMenu from '../components/room/RoleAssignMenu';
 import RemoveParticipantModal from '../components/room/RemoveParticipantModal';
 import TransferHostModal from '../components/room/TransferHostModal';
+import RoomCreatedModal from '../components/room/RoomCreatedModal';
 import Modal from '../components/common/Modal';
 import Button from '../components/common/Button';
 import { showToast } from '../components/common/Toast';
@@ -34,6 +35,8 @@ function RoomLoading() {
 
 export default function RoomPage() {
   const { roomCode } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     ready,
     currentUser,
@@ -62,6 +65,9 @@ export default function RoomPage() {
   const code = roomCode || '';
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<MobileTab>('participants');
+  const [createdModalOpen, setCreatedModalOpen] = useState(
+    () => (location.state as { justCreated?: boolean } | null)?.justCreated === true
+  );
 
   const [roleModalTarget, setRoleModalTarget] = useState<Participant | null>(null);
   const [removeModalTarget, setRemoveModalTarget] = useState<Participant | null>(null);
@@ -70,6 +76,11 @@ export default function RoomPage() {
   if (!ready || !currentUser) {
     return <RoomLoading />;
   }
+
+  const closeCreatedModal = () => {
+    setCreatedModalOpen(false);
+    navigate(location.pathname, { replace: true });
+  };
 
   const handleRoleChange = (participantId: string) => {
     const p = participants.find((pp) => pp.id === participantId);
@@ -282,6 +293,12 @@ export default function RoomPage() {
         participantName={transferModalTarget?.username || ''}
         onConfirm={confirmTransfer}
         onClose={() => setTransferModalTarget(null)}
+      />
+
+      <RoomCreatedModal
+        isOpen={createdModalOpen}
+        roomCode={code}
+        onClose={closeCreatedModal}
       />
     </div>
   );

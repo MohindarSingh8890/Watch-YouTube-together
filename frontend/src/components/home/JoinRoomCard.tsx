@@ -6,13 +6,14 @@ import Input from '../common/Input';
 import { showToast } from '../common/Toast';
 
 export default function JoinRoomCard() {
+  const [displayName, setDisplayName] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [checking, setChecking] = useState(false);
   const navigate = useNavigate();
 
   const handleJoin = async () => {
     const code = roomCode.trim().toUpperCase();
-    if (!code || checking) return;
+    if (!code || !displayName.trim() || checking) return;
 
     setChecking(true);
     try {
@@ -29,7 +30,7 @@ export default function JoinRoomCard() {
       setChecking(false);
     }
 
-    navigate(`/join/${code}`);
+    navigate(`/join/${code}`, { state: { username: displayName.trim() } });
   };
 
   return (
@@ -43,12 +44,26 @@ export default function JoinRoomCard() {
       <p className="text-sm text-zinc-400 mb-4">Enter a room code to join an existing party</p>
       <div className="space-y-3">
         <Input
-          placeholder="Room code (e.g. XKCD42)"
+          label="Your display name"
+          placeholder="e.g. AlexViewer"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+        />
+        <Input
+          label="Room code"
+          placeholder="e.g. XKCD42"
           value={roomCode}
           onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
           className="font-mono tracking-wider text-center"
+          onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
         />
-        <Button variant="secondary" onClick={handleJoin} className="w-full" disabled={!roomCode.trim() || checking}>
+        <Button
+          variant="secondary"
+          onClick={handleJoin}
+          className="w-full"
+          disabled={!displayName.trim() || !roomCode.trim() || checking}
+        >
           {checking ? 'Checking...' : 'Join Room'}
         </Button>
       </div>
