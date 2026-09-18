@@ -63,10 +63,6 @@ as the build command, and:
 npm start --prefix backend
 ```
 
-as the start command. Set `PORT` if the host does not provide it and set
-`CLIENT_URL` to the deployed frontend origin only when frontend and backend are
-hosted separately. The current live URL is listed above.
-
 ## Verification
 
 ```bash
