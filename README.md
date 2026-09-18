@@ -3,6 +3,12 @@
 A real-time YouTube watch party application. Create a room, share its code or
 link, and watch the same video together with role-based controls.
 
+## Production Deployment
+
+Live Application: https://watch-youtube-together.onrender.com/
+
+The application is deployed on Render and is publicly accessible.
+
 ## Features
 
 - Socket.IO synchronization for play, pause, seeking, and changing videos
@@ -59,7 +65,7 @@ npm start --prefix backend
 
 as the start command. Set `PORT` if the host does not provide it and set
 `CLIENT_URL` to the deployed frontend origin only when frontend and backend are
-hosted separately. Add the resulting public URL here before submission.
+hosted separately. The current live URL is listed above.
 
 ## Verification
 
