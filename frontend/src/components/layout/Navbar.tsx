@@ -12,13 +12,22 @@ interface NavbarProps {
 }
 
 export default function Navbar({ roomCode, roomName, userRole, showBackToHome, onLeave }: NavbarProps) {
+  const brandClassName = 'flex items-center gap-2 text-zinc-100 font-bold text-lg';
+
   return (
     <nav className="h-14 bg-surface-50/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between px-4 md:px-6 sticky top-0 z-40">
       <div className="flex items-center gap-3">
-        <Link to="/" className="flex items-center gap-2 text-zinc-100 font-bold text-lg hover:opacity-80 transition-opacity">
-          <Tv size={22} className="text-accent-red" />
-          <span className="hidden sm:inline">WatchParty</span>
-        </Link>
+        {showBackToHome ? (
+          <div className={brandClassName} aria-label="WatchParty">
+            <Tv size={22} className="text-accent-red" />
+            <span className="hidden sm:inline">WatchParty</span>
+          </div>
+        ) : (
+          <Link to="/" className={`${brandClassName} hover:opacity-80 transition-opacity`}>
+            <Tv size={22} className="text-accent-red" />
+            <span className="hidden sm:inline">WatchParty</span>
+          </Link>
+        )}
 
         {roomCode && (
           <>
