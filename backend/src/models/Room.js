@@ -11,8 +11,6 @@ class Room {
     this.videoId = null;
     this.isPlaying = false;
     this.currentTime = 0;
-    // Timestamp lets a joining client start at the correct position while a
-    // video is playing, rather than at the position of the last button click.
     this.updatedAt = Date.now();
     this.chatHistory = [];
     this.pendingControlRequests = new Set(); // userIds

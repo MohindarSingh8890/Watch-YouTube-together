@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/layout/Navbar';
@@ -21,6 +21,16 @@ import { useRoom } from '../hooks/useRoom';
 import { Users, MessageCircle, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 
 type MobileTab = 'participants' | 'chat';
+
+// chhota red dot with count, chat tab ke upar chipka rehta hai
+function ChatBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="absolute -top-1.5 -right-3 min-w-[18px] h-[18px] px-1 rounded-full bg-accent-red text-white text-[11px] font-bold flex items-center justify-center shadow-md">
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
 
 function RoomLoading() {
   return (
@@ -65,6 +75,10 @@ export default function RoomPage() {
   const code = roomCode || '';
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileTab, setMobileTab] = useState<MobileTab>('participants');
+
+  // unread badge for chat, keeps climbing till the tab is actually opened
+  const [unseenChat, setUnseenChat] = useState(0);
+  const seenLenRef = useRef(chat.length);
   const [createdModalOpen, setCreatedModalOpen] = useState(
     () => (location.state as { justCreated?: boolean } | null)?.justCreated === true
   );
@@ -72,6 +86,18 @@ export default function RoomPage() {
   const [roleModalTarget, setRoleModalTarget] = useState<Participant | null>(null);
   const [removeModalTarget, setRemoveModalTarget] = useState<Participant | null>(null);
   const [transferModalTarget, setTransferModalTarget] = useState<Participant | null>(null);
+
+  // jab chat tab band ho aur messages girein to counter badhao, tab kholte hi zero
+  useEffect(() => {
+    if (mobileTab === 'chat') {
+      seenLenRef.current = chat.length;
+      setUnseenChat(0);
+      return;
+    }
+    const fresh = chat.length - seenLenRef.current;
+    if (fresh > 0) setUnseenChat((n) => n + fresh);
+    seenLenRef.current = chat.length;
+  }, [chat.length, mobileTab]);
 
   if (!ready || !currentUser) {
     return <RoomLoading />;
@@ -204,12 +230,13 @@ export default function RoomPage() {
                 </button>
                 <button
                   onClick={() => setMobileTab('chat')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors cursor-pointer ${
+                  className={`relative flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors cursor-pointer ${
                     mobileTab === 'chat' ? 'text-zinc-100 border-b-2 border-accent-red' : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
                   <MessageCircle size={15} />
                   Chat
+                  <ChatBadge count={unseenChat} />
                 </button>
               </div>
               <div className="flex-1 overflow-hidden">
@@ -244,12 +271,13 @@ export default function RoomPage() {
             </button>
             <button
               onClick={() => setMobileTab('chat')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
+              className={`relative flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors cursor-pointer ${
                 mobileTab === 'chat' ? 'text-zinc-100 border-b-2 border-accent-red' : 'text-zinc-500'
               }`}
             >
               <MessageCircle size={15} />
               Chat
+              <ChatBadge count={unseenChat} />
             </button>
           </div>
           <div className="overflow-y-auto" style={{ height: 'calc(40vh - 42px)' }}>

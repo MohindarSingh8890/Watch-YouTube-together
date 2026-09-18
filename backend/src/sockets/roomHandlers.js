@@ -289,8 +289,7 @@ function scheduleDisconnectCleanup(socket, io) {
   const entry = socketRoomMap.get(socket.id);
   if (!entry) return;
 
-  // Socket.IO reconnects after short network drops. Keep the participant (and
-  // their role) during that window so the browser can resume its session.
+  // Give reconnecting clients time to restore their session.
   socketRoomMap.delete(socket.id);
   socket.leave(entry.roomCode);
   cancelDisconnectCleanup(entry.participantId);

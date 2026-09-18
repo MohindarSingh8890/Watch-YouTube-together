@@ -240,7 +240,7 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
       </button>
 
       {/* bottom overlay controls */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-8 pb-3 px-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-8 pb-3 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
         <div
           className={`w-full h-1.5 bg-zinc-700 rounded-full mb-3 ${
             canControl ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none'
