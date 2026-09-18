@@ -127,7 +127,7 @@ export default function RoomPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* main content */}
         <div className="flex-1 flex flex-col overflow-y-auto">
-          <div className="p-4 md:p-6 flex-1">
+          <div className="p-4 pb-[42vh] md:p-6 md:pb-6 flex-1">
             <div className="max-w-5xl mx-auto space-y-4">
               {/* video player */}
               <div className="relative">

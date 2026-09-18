@@ -157,6 +157,14 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
     }
   };
 
+  const toggleMute = () => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (muted) player.unMute();
+    else player.mute();
+    setMuted(!muted);
+  };
+
   const togglePlay = () => {
     if (!cbRef.current.canControl || !playerRef.current) return;
     const p = playerRef.current;
@@ -256,7 +264,7 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
               {playing ? <Pause size={20} /> : <Play size={20} />}
             </button>
             <button
-              onClick={() => setMuted(!muted)}
+              onClick={toggleMute}
               className="text-white hover:text-zinc-300 transition-colors cursor-pointer"
             >
               {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}

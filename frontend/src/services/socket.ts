@@ -9,7 +9,7 @@ import {
 // VITE_SOCKET_URL is optional; in dev the vite proxy forwards /socket.io
 const url = import.meta.env.VITE_SOCKET_URL as string | undefined;
 
-export const socket = url ? io(url) : io();
+export const socket = url ? io(url) : io({ autoConnect: true });
 
 export function mapParticipant(raw: RawParticipant): Participant {
   return {

@@ -1,15 +1,30 @@
-# Watch Party System
+# WatchParty
 
-Watch YouTube videos together in real-time. Create a room, share the code,
-everyone watches in sync.
+A real-time YouTube watch party application. Create a room, share its code or
+link, and watch the same video together with role-based controls.
 
-## Current status
+## Features
 
-UI/UX prototype only. All data is mocked on the frontend - no real
-WebSocket connections, no real auth, no real YouTube integration yet.
-The interface is fully clickable so it can be demoed and reviewed.
+- Socket.IO synchronization for play, pause, seeking, and changing videos
+- YouTube IFrame Player integration
+- Unique six-character room codes and shareable room URLs
+- Host, moderator, and participant roles; permissions are enforced by the server
+- Host actions: promote/demote, remove participants, and transfer ownership
+- Reconnect grace period so a brief network drop does not lose a participant's role
+- Persisted room state and last 100 chat messages in `backend/data/db.json`
+- In-room text chat and emoji reactions
+- Responsive React/Tailwind interface for desktop and mobile
 
-## Getting started
+## Run locally
+
+Use two terminals.
+
+```bash
+cd backend
+npm install
+copy .env.example .env
+npm run dev
+```
 
 ```bash
 cd frontend
@@ -17,24 +32,52 @@ npm install
 npm run dev
 ```
 
-Open the printed localhost URL.
+Open `http://localhost:5173`. The Vite development server proxies API and
+Socket.IO traffic to `http://localhost:5000`.
 
-## What's here
+`backend/.env`:
 
-- Home page - create or join a room
-- Room page - video player with mock controls, participant list with role
-  badges, host action menus, chat, reactions
-- Role flow - host can promote to moderator, remove people, transfer host
-- Participant view - playback controls locked, request-control button
-- Join / not-found / pending approval screens
+```env
+PORT=5000
+CLIENT_URL=http://localhost:5173
+```
 
-## Tech stack
+## Production deployment
 
-- React 18 + TypeScript + Vite
-- Tailwind CSS
-- React Router
-- Framer Motion (modals/toasts)
-- Lucide icons
+The backend serves `frontend/dist` when it exists, so one Node web service is
+enough. Configure your host (for example Render or Railway) with:
 
-Backend skeleton lives in `backend/` and is intentionally empty for now.
-See `docs/architecture-overview.md` for the planned design.
+```bash
+npm ci --prefix frontend && npm run build --prefix frontend && npm ci --prefix backend
+```
+
+as the build command, and:
+
+```bash
+npm start --prefix backend
+```
+
+as the start command. Set `PORT` if the host does not provide it and set
+`CLIENT_URL` to the deployed frontend origin only when frontend and backend are
+hosted separately. Add the resulting public URL here before submission.
+
+## Verification
+
+```bash
+cd frontend
+npm run build
+```
+
+For a manual multi-user check, open the app in two browser windows, create a
+room in one, and join its code in the other. Confirm playback sync, role
+changes, removal, chat, and a short disconnect/reconnect.
+
+## Stack
+
+- React, TypeScript, Vite, Tailwind CSS, Framer Motion
+- Node.js, Express, Socket.IO
+- YouTube IFrame Player API
+- Local JSON persistence (intentional MVP trade-off)
+
+See [the architecture overview](docs/architecture-overview.md) for the event
+flow and design decisions.

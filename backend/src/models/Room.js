@@ -11,6 +11,9 @@ class Room {
     this.videoId = null;
     this.isPlaying = false;
     this.currentTime = 0;
+    // Timestamp lets a joining client start at the correct position while a
+    // video is playing, rather than at the position of the last button click.
+    this.updatedAt = Date.now();
     this.chatHistory = [];
     this.pendingControlRequests = new Set(); // userIds
     this.hostId = host.id;
@@ -35,6 +38,16 @@ class Room {
     if (videoId !== undefined) this.videoId = videoId;
     if (isPlaying !== undefined) this.isPlaying = isPlaying;
     if (currentTime !== undefined) this.currentTime = currentTime;
+    this.updatedAt = Date.now();
+  }
+
+  playbackState() {
+    const elapsed = this.isPlaying ? (Date.now() - this.updatedAt) / 1000 : 0;
+    return {
+      videoId: this.videoId,
+      isPlaying: this.isPlaying,
+      currentTime: Math.max(0, Math.round((this.currentTime + elapsed) * 100) / 100),
+    };
   }
 
   setRole(participantId, role) {
@@ -80,9 +93,7 @@ class Room {
   getPublicState() {
     return {
       roomCode: this.code,
-      videoId: this.videoId,
-      isPlaying: this.isPlaying,
-      currentTime: this.currentTime,
+      ...this.playbackState(),
       hostId: this.hostId,
       participants: this.participantsList(),
     };
@@ -95,6 +106,7 @@ class Room {
       videoId: this.videoId,
       isPlaying: this.isPlaying,
       currentTime: this.currentTime,
+      updatedAt: this.updatedAt,
       chatHistory: this.chatHistory,
       pendingControlRequests: Array.from(this.pendingControlRequests),
       participants: Array.from(this.participants.values()).map((p) => p.toJSON()),
@@ -115,6 +127,7 @@ class Room {
     room.videoId = typeof data.videoId === "string" ? data.videoId : null;
     room.isPlaying = !!data.isPlaying;
     room.currentTime = Number.isFinite(data.currentTime) ? data.currentTime : 0;
+    room.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : Date.now();
     room.chatHistory = Array.isArray(data.chatHistory) ? data.chatHistory : [];
     room.pendingControlRequests = new Set(
       Array.isArray(data.pendingControlRequests) ? data.pendingControlRequests : []

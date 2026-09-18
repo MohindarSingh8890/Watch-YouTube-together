@@ -6,6 +6,8 @@ const { isHost, canControlPlayback } = require("../utils/permissions");
 
 // socket.id -> { roomCode, participantId }
 const socketRoomMap = new Map();
+const disconnectTimers = new Map();
+const RECONNECT_GRACE_MS = 20_000;
 
 function registerRoomHandlers(socket, io) {
   socket.on(EVENTS.CREATE_ROOM, (payload, ack) => {
@@ -46,6 +48,7 @@ function registerRoomHandlers(socket, io) {
 
     const participant = returning || new Participant(username, socket.id);
     if (!returning) room.addParticipant(participant);
+    cancelDisconnectCleanup(participant.id);
     dropStaleSockets(io, socket.id, participant.id);
 
     socketRoomMap.set(socket.id, { roomCode: room.code, participantId: participant.id });
@@ -81,11 +84,7 @@ function registerRoomHandlers(socket, io) {
     ctx.room.setPlayback({ isPlaying: true, currentTime: t });
     roomService.saveRooms();
     ack?.({ ok: true });
-    socket.to(ctx.roomCode).emit(EVENTS.SYNC_STATE, {
-      videoId: ctx.room.videoId,
-      isPlaying: true,
-      currentTime: t,
-    });
+    broadcastPlayback(socket, ctx);
   });
 
   socket.on(EVENTS.PAUSE, (payload, ack) => {
@@ -97,11 +96,7 @@ function registerRoomHandlers(socket, io) {
     ctx.room.setPlayback({ isPlaying: false, currentTime: t });
     roomService.saveRooms();
     ack?.({ ok: true });
-    socket.to(ctx.roomCode).emit(EVENTS.SYNC_STATE, {
-      videoId: ctx.room.videoId,
-      isPlaying: false,
-      currentTime: t,
-    });
+    broadcastPlayback(socket, ctx);
   });
 
   socket.on(EVENTS.SEEK, (payload, ack) => {
@@ -113,11 +108,7 @@ function registerRoomHandlers(socket, io) {
     ctx.room.setPlayback({ currentTime: t });
     roomService.saveRooms();
     ack?.({ ok: true });
-    socket.to(ctx.roomCode).emit(EVENTS.SYNC_STATE, {
-      videoId: ctx.room.videoId,
-      isPlaying: ctx.room.isPlaying,
-      currentTime: t,
-    });
+    broadcastPlayback(socket, ctx);
   });
 
   socket.on(EVENTS.CHANGE_VIDEO, (payload, ack) => {
@@ -133,11 +124,7 @@ function registerRoomHandlers(socket, io) {
     ctx.room.setPlayback({ videoId, isPlaying: false, currentTime: 0 });
     roomService.saveRooms();
     ack?.({ ok: true });
-    socket.to(ctx.roomCode).emit(EVENTS.SYNC_STATE, {
-      videoId,
-      isPlaying: false,
-      currentTime: 0,
-    });
+    broadcastPlayback(socket, ctx);
   });
 
   socket.on(EVENTS.ASSIGN_ROLE, (payload, ack) => {
@@ -252,7 +239,7 @@ function registerRoomHandlers(socket, io) {
   });
 
   socket.on("disconnect", () => {
-    leaveRoom(socket, io);
+    scheduleDisconnectCleanup(socket, io);
   });
 }
 
@@ -266,6 +253,7 @@ function leaveRoom(socket, io) {
   if (!room) return;
 
   const participant = room.removeParticipant(entry.participantId);
+  cancelDisconnectCleanup(entry.participantId);
   if (!participant) {
     if (room.participants.size === 0) roomService.deleteRoom(room.code);
     else roomService.saveRooms();
@@ -295,6 +283,71 @@ function leaveRoom(socket, io) {
     userId: participant.id,
     participants: room.participantsList(),
   });
+}
+
+function scheduleDisconnectCleanup(socket, io) {
+  const entry = socketRoomMap.get(socket.id);
+  if (!entry) return;
+
+  // Socket.IO reconnects after short network drops. Keep the participant (and
+  // their role) during that window so the browser can resume its session.
+  socketRoomMap.delete(socket.id);
+  socket.leave(entry.roomCode);
+  cancelDisconnectCleanup(entry.participantId);
+
+  const timer = setTimeout(() => {
+    disconnectTimers.delete(entry.participantId);
+    const room = roomService.getRoom(entry.roomCode);
+    if (!room || hasLiveParticipantSocket(io, entry.roomCode, entry.participantId)) return;
+
+    removeDisconnectedParticipant(room, entry.participantId, io);
+  }, RECONNECT_GRACE_MS);
+  disconnectTimers.set(entry.participantId, timer);
+}
+
+function removeDisconnectedParticipant(room, participantId, io) {
+  const participant = room.removeParticipant(participantId);
+  if (!participant) return;
+
+  if (room.participants.size === 0) {
+    roomService.deleteRoom(room.code);
+    return;
+  }
+
+  if (participant.id === room.hostId) {
+    const next = room.pickNextHost();
+    if (next) {
+      room.hostId = next.id;
+      next.role = ROLES.HOST;
+      io.to(room.code).emit(EVENTS.HOST_TRANSFERRED, {
+        newHostId: next.id,
+        participants: room.participantsList(),
+      });
+    }
+  }
+
+  roomService.saveRooms();
+  io.to(room.code).emit(EVENTS.USER_LEFT, {
+    username: participant.username,
+    userId: participant.id,
+    participants: room.participantsList(),
+  });
+}
+
+function cancelDisconnectCleanup(participantId) {
+  const timer = disconnectTimers.get(participantId);
+  if (timer) clearTimeout(timer);
+  disconnectTimers.delete(participantId);
+}
+
+function hasLiveParticipantSocket(io, roomCode, participantId) {
+  return getSocketIdsByParticipant(roomCode, participantId).some((id) =>
+    io.sockets.sockets.has(id)
+  );
+}
+
+function broadcastPlayback(socket, ctx) {
+  socket.to(ctx.roomCode).emit(EVENTS.SYNC_STATE, ctx.room.playbackState());
 }
 
 function takeReturningParticipant(room, participantId, username, socketId) {
