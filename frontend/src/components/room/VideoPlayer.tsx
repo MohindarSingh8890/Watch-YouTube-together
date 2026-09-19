@@ -31,9 +31,50 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // overlay controls auto-hide (like a normal video player)
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverControlsRef = useRef(false); // cursor is sitting on the controls
+
   // keep latest props available to the yt event callbacks
   const cbRef = useRef({ video, canControl, onPlay, onPause, onSeek, onTimeChange });
   cbRef.current = { video, canControl, onPlay, onPause, onSeek, onTimeChange };
+
+  const clearHideTimer = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  // any mouse movement over the player brings the controls back
+  // and restarts the idle timer
+  const showControls = () => {
+    setControlsVisible(true);
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => {
+      // only auto-hide while the video is actually playing,
+      // and never when the cursor is resting on the controls
+      const isPlaying = playerRef.current?.getPlayerState?.() === 1;
+      if (isPlaying && !hoverControlsRef.current) setControlsVisible(false);
+    }, 2500);
+  };
+
+  // leaving the player hides the controls right away (only while playing)
+  const handleMouseLeave = () => {
+    clearHideTimer();
+    const isPlaying = playerRef.current?.getPlayerState?.() === 1;
+    if (isPlaying) setControlsVisible(false);
+  };
+
+  // when the video pauses, keep the controls visible
+  useEffect(() => {
+    if (!playing) showControls();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
+
+  // don't leave a stray timer behind on unmount
+  useEffect(() => clearHideTimer, []);
 
   const applyRemote = () => {
     const p = playerRef.current;
@@ -229,7 +270,12 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
   }
 
   return (
-    <div ref={playerBoxRef} className="watch-player relative w-full bg-black rounded-2xl overflow-hidden group">
+    <div
+      ref={playerBoxRef}
+      className="watch-player relative w-full bg-black rounded-2xl overflow-hidden group"
+      onMouseMove={showControls}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* the yt api swaps this div for the iframe */}
       <div ref={containerRef} className="relative aspect-video w-full" />
 
@@ -246,23 +292,14 @@ export default function VideoPlayer({ video, canControl, onPlay, onPause, onSeek
         </div>
       )}
 
-      {/* big play button */}
-      <button
-        onClick={togglePlay}
-        disabled={!canControl}
-        className={`absolute z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center transition-all ${
-          canControl ? 'cursor-pointer hover:bg-white/30 hover:scale-105' : 'opacity-40 cursor-not-allowed'
+      {/* bottom overlay controls (auto-hide on desktop while playing) */}
+      <div
+        onMouseEnter={() => { hoverControlsRef.current = true; clearHideTimer(); setControlsVisible(true); }}
+        onMouseLeave={() => { hoverControlsRef.current = false; showControls(); }}
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-8 pb-3 px-4 opacity-100 md:transition-opacity md:duration-200 ${
+          controlsVisible ? 'md:opacity-100' : 'md:opacity-0 md:pointer-events-none'
         }`}
       >
-        {playing ? (
-          <Pause size={28} className="text-white" fill="white" />
-        ) : (
-          <Play size={28} className="text-white ml-1" fill="white" />
-        )}
-      </button>
-
-      {/* bottom overlay controls */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-8 pb-3 px-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
         <div
           className={`w-full h-1.5 bg-zinc-700 rounded-full mb-3 ${
             canControl ? 'cursor-pointer' : 'cursor-not-allowed pointer-events-none'
